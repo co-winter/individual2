@@ -1,135 +1,85 @@
-import socket
 import json
+import socket
 
 HOST = "127.0.0.1"
 PORT = 5000
-
 QUESTIONS = [
-    {"question": "What is 2 + 2?", "choices": ["1. 3", "2. 4", "3. 5"], "answer": "2"},
-    {"question": "Which language is this server written in?", "choices": ["1. Python", "2. Java", "3. C++"], "answer": "1"},
-    {"question": "Which device connects computers in a local network?", "choices": ["1. Keyboard", "2. Monitor", "3. Switch"], "answer": "3"},
+    {"question": "What does IP stand for?", "choices": ["Internet Protocol", "Internal Program", "Input Process"], "answer": 1},
+    {"question": "Which protocol creates a reliable connection?", "choices": ["UDP", "TCP", "FTP"], "answer": 2},
+    {"question": "What is the server's job?", "choices": ["Draw the window", "Wait for requests and respond", "Install Python"], "answer": 2},
 ]
 
-
-def send_message(connection, message):
-    connection.sendall((json.dumps(message) + "\n").encode("utf-8"))
-
-
-def receive_message(file):
-    line = file.readline()
-    if not line:
-        return None
-    try:
-        return json.loads(line)
-    except json.JSONDecodeError:
-        return {"type": "invalid"}
-
+def send(connection, data):
+    connection.sendall((json.dumps(data) + "\\n").encode("utf-8"))
 
 def handle_client(connection, address):
-    print(f"Client connected: {address}")
     score = 0
-    asked_questions = []
-
-    with connection:
-        with connection.makefile("r", encoding="utf-8") as client_file:
-            send_message(connection, {
-                "type": "message",
-                "text": "Welcome to the Quiz Server! Type question, score, or quit."
-            })
-
-            while True:
-                request = receive_message(client_file)
-                if request is None:
-                    print(f"Client disconnected: {address}")
-                    break
-
-                request_type = request.get("type", "").lower()
-
-                if request_type == "question":
-                    available = [
-                        index for index in range(len(QUESTIONS))
-                        if index not in asked_questions
-                    ]
-                    if not available:
-                        send_message(connection, {
-                            "type": "message",
-                            "text": "You have answered all the questions. Type score to see your results."
-                        })
-                        continue
-
-                    question_index = available[0]
-                    asked_questions.append(question_index)
-                    question = QUESTIONS[question_index]
-                    send_message(connection, {
-                        "type": "question",
-                        "question": question["question"],
-                        "choices": question["choices"],
-                        "question_number": len(asked_questions),
-                        "total_questions": len(QUESTIONS),
-                        "question_index": question_index,
-                    })
-
-                elif request_type == "answer":
-                    answer = request.get("answer", "").strip()
-                    question_index = request.get("question_index")
-
-                    if not isinstance(question_index, int) or question_index not in asked_questions:
-                        send_message(connection, {
-                            "type": "message",
-                            "text": "Please request a question before answering."
-                        })
-                        continue
-
-                    question = QUESTIONS[question_index]
-                    if answer == question["answer"]:
-                        score += 1
-                        response_text = "Correct!"
-                    else:
-                        response_text = "Not quite. The correct answer was " + question["answer"] + "."
-
-                    send_message(connection, {
-                        "type": "answer_result",
-                        "text": response_text,
-                        "score": score,
-                        "questions_answered": len(asked_questions),
-                    })
-
-                elif request_type == "score":
-                    send_message(connection, {
-                        "type": "score",
-                        "score": score,
-                        "questions_answered": len(asked_questions),
-                        "total_questions": len(QUESTIONS),
-                    })
-
-                elif request_type == "quit":
-                    send_message(connection, {
-                        "type": "message",
-                        "text": "Thanks for playing. Goodbye!"
-                    })
-                    break
-
+    answered = 0
+    asked = set()
+    print("Connected:", address)
+    send(connection, {"type": "message", "text": "Connected to the quiz server."})
+    reader = connection.makefile("r", encoding="utf-8")
+    try:
+        for line in reader:
+            if not line:
+                break
+            try:
+                request = json.loads(line)
+            except json.JSONDecodeError:
+                send(connection, {"type": "error", "text": "Invalid request."})
+                continue
+            action = request.get("action")
+            if action == "question":
+                available = [i for i in range(len(QUESTIONS)) if i not in asked]
+                if not available:
+                    send(connection, {"type": "finished", "text": "All questions answered.", "score": score, "questions_answered": answered, "total_questions": len(QUESTIONS)})
                 else:
-                    send_message(connection, {
-                        "type": "message",
-                        "text": "Unknown request. Use question, score, or quit."
-                    })
-
-    print(f"Ready for another client. Previous client: {address}")
-
+                    i = available[0]
+                    asked.add(i)
+                    q = QUESTIONS[i]
+                    send(connection, {"type": "question", "question": q["question"], "choices": q["choices"], "question_number": len(asked), "total_questions": len(QUESTIONS), "question_index": i})
+            elif action == "answer":
+                i = request.get("question_index")
+                answer = request.get("answer")
+                if not isinstance(i, int) or i not in asked:
+                    send(connection, {"type": "error", "text": "Request a question first."})
+                else:
+                    correct = answer == QUESTIONS[i]["answer"]
+                    if correct:
+                        score += 1
+                        result = "Correct!"
+                    else:
+                        correct_text = QUESTIONS[i]["choices"][QUESTIONS[i]["answer"] - 1]
+                        result = "Not quite. Correct answer: " + correct_text
+                    answered += 1
+                    send(connection, {"type": "answer_result", "text": result, "score": score, "questions_answered": answered, "total_questions": len(QUESTIONS)})
+            elif action == "score":
+                send(connection, {"type": "score", "score": score, "questions_answered": answered, "total_questions": len(QUESTIONS)})
+            elif action == "quit":
+                send(connection, {"type": "message", "text": "Disconnected from quiz server."})
+                break
+            else:
+                send(connection, {"type": "error", "text": "Unknown request."})
+    except (ConnectionResetError, BrokenPipeError):
+        print("Client disconnected unexpectedly:", address)
+    finally:
+        reader.close()
+        connection.close()
+        print("Disconnected:", address)
 
 def main():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((HOST, PORT))
-        server.listen()
-        print(f"Quiz Server listening on {HOST}:{PORT}")
-        print("Start quiz_client.py in another terminal to connect.")
-
+    print(f"Quiz server listening on {HOST}:{PORT}")
+    print("Keep this terminal open while using the GUI.")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((HOST, PORT))
+        server_socket.listen()
         while True:
-            connection, address = server.accept()
+            connection, address = server_socket.accept()
             handle_client(connection, address)
 
-
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\\nQuiz server stopped.")
