@@ -87,7 +87,7 @@ class QuizGUI:
 
     def send_request(self, data):
         try:
-            self.connection.sendall((json.dumps(data) + "\\n").encode("utf-8"))
+            self.connection.sendall((json.dumps(data) + "\n").encode("utf-8"))
             line = self.reader.readline()
             if not line:
                 self.events.put(("disconnected", "The server closed the connection."))
@@ -182,7 +182,7 @@ class QuizGUI:
     def close(self):
         if self.connection is not None:
             try:
-                self.connection.sendall((json.dumps({"action": "quit"}) + "\\n").encode("utf-8"))
+                self.connection.sendall((json.dumps({"action": "quit"}) + "\n").encode("utf-8"))
                 self.reader.close()
                 self.connection.close()
             except OSError:

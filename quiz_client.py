@@ -40,7 +40,7 @@ def main():
                         continue
 
                     if choice == "question":
-                        send_message(client, {"type": "question"})
+                        send_message(client, {"action": "question"})
                         response = receive_message(server_file)
                         if response is None:
                             print("The server disconnected.")
@@ -54,8 +54,8 @@ def main():
 
                             answer = input("Enter the number of your answer: ").strip()
                             send_message(client, {
-                                "type": "answer",
-                                "answer": answer,
+                                "action": "answer",
+                                "answer": int(answer),
                                 "question_index": response["question_index"],
                             })
                             result = receive_message(server_file)
@@ -69,7 +69,7 @@ def main():
                             print(response.get("text", ""))
 
                     elif choice == "score":
-                        send_message(client, {"type": "score"})
+                        send_message(client, {"action": "score"})
                         response = receive_message(server_file)
                         if response:
                             print(
@@ -79,7 +79,7 @@ def main():
                             print("Total questions in quiz: " + str(response.get("total_questions", 0)))
 
                     elif choice == "quit":
-                        send_message(client, {"type": "quit"})
+                        send_message(client, {"action": "quit"})
                         response = receive_message(server_file)
                         if response:
                             print(response.get("text", "Goodbye!"))

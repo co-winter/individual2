@@ -10,7 +10,7 @@ QUESTIONS = [
 ]
 
 def send(connection, data):
-    connection.sendall((json.dumps(data) + "\\n").encode("utf-8"))
+    connection.sendall((json.dumps(data) + "\n").encode("utf-8"))
 
 def handle_client(connection, address):
     score = 0
@@ -25,8 +25,7 @@ def handle_client(connection, address):
                 break
             try:
                 request = json.loads(line)
-            except json.JSONDecodeError:
-                send(connection, {"type": "error", "text": "Invalid request."})
+            except json.JSONDecodeError:  
                 continue
             action = request.get("action")
             if action == "question":
@@ -82,4 +81,4 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\\nQuiz server stopped.")
+        print("\nQuiz server stopped.")
